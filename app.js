@@ -4,13 +4,24 @@ const Manager = require("./lib/Manager");
 const inquirer = require("inquirer");
 const fs = require("fs");
 const util = require("util");
+const  ejs = require('ejs');
 
-const readFileAync = util.promisify(fs.readFile);
-const writeFileAync = util.promisify(fs.writeFile);
+const readFileAsync = util.promisify(fs.readFile);
+const writeFileAsync = util.promisify(fs.writeFile);
 
-const managerTemplate = fs.readFileSync("./templates/manager.html","utf8");
-const engineerTemplate = fs.readFileSync("./templates/engineer.html","utf8");
-const internTemplate = fs.readFileSync("./templates/intern.html","utf8");
+let managerTemplate = "";
+let engineerTemplate = "";
+let internTemplate = "";
+
+async function readTemplate(){
+    const tempManagerTemplate =  readFileAsync("./templates/manager.html","utf8").then(data => managerTemplate=data);
+    const tempEngineerTemplate = readFileAsync("./templates/engineer.html","utf8").then(data => engineerTemplate=data);;
+    const tempInternTemplate =   readFileAsync("./templates/intern.html","utf8").then(data => internTemplate=data);;
+    await Promise.all([tempManagerTemplate,tempEngineerTemplate,tempInternTemplate])
+    .then(msg=> console.log("Templates loading completed"))
+    .catch(err => console.log(err));
+
+}
 
 async function getSingleEmployeeInfo() {
     const employeeInfo = await inquirer.prompt([
@@ -91,45 +102,42 @@ async function createEmployees() {
 }
 
 function generateSingleCard(employee){
+    console.log(managerTemplate);
+    console.log(engineerTemplate);
+    console.log(internTemplate);
     switch (employee.getRole()){
         case "Manager":
-            return eval("`"+managerTemplate +"`");
+            return ejs.render(managerTemplate,{employee: employee})
         case "Engineer":
-            return eval("`"+engineerTemplate +"`");
+            return  ejs.render(engineerTemplate,{employee: employee})
         case "Intern":
-            return eval("`"+internTemplate +"`");
+            return  ejs.render(internTemplate,{employee: employee})
     }
 }
 
-function generateEmployeeCards(employeeArray){
+ function generateEmployeeCards(employeeArray){
     const htmlEmployeeArray = employeeArray.map(employee => generateSingleCard(employee));
-    return `<div class="ui stackable cards">${htmlEmployeeArray.join(" ")}</div>`
+    return htmlEmployeeArray.join(" ")
 }
 
 function rankTeam(team){
-    const teamRanking = team.map(member =>{
-        switch(member.role){
-            case "Manager":
-                member.rank = 100;
-                break;
-            case "Engineer":
-                member.rank = 50;
-                break;
-            case "Intern":
-                member.rank = 10;
-                break;
-        }
-        return member;
-    })
-    return teamRanking.sort((a,b)=> b.rank-a.rank)
+    return team.sort((a,b)=> b.getRank()-a.getRank())
 }
 
 
-async function generateTeamHTML() {
-    const employeeArray = rankTeam(await createEmployees());
-    const resultCards = generateEmployeeCards(employeeArray);
-    const main = await readFileAync("./templates/main.html","utf8");
-    const renderedMain = eval("`"+ main +"`");
-    const result = await writeFileAync("./output/myTeam.html",renderedMain);
+async function main() {
+    try{
+        await readTemplate();
+        const employeeArray = rankTeam(await createEmployees());
+        const resultCards = generateEmployeeCards(employeeArray);
+        const main = await readFileAsync("./templates/main.html","utf8");
+        const renderedMain = ejs.render(main,{finalCards: resultCards})
+        const result = await writeFileAsync("./output/myTeam.html",renderedMain);
+    }
+    catch(err){
+        console.log(error);
+    }
+   
 }
-generateTeamHTML();
+
+main();
